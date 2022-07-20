@@ -29,8 +29,10 @@ type threadSafeLogger struct {
 	discordPingID  string
 }
 
-// Setup initialize the variables for calling webhooks
-// TODO: Make this so it can be reloadable with sighup
+// Setup primes the threadSafeLogger to send messages to a Discord server
+// hookURL is the weebhook URL created by the Discord server in the Integrations settings
+// pingID is the Discord user or role ID to ping when sending important messages
+// Setup can be safely called at any time to change the Discord server hookURL and pingID
 func Setup(hookURL, pingID string) {
 	logger.Lock()
 	logger.discordHookURL = hookURL
@@ -129,15 +131,21 @@ func log(mt messageType, v ...interface{}) {
 	logger.Unlock()
 }
 
+// Info logs a message to the terminal with [INFO] prefix
 func Info(v ...interface{}) {
 	log(typeInfo, v...)
 }
 
+// InfoToDiscord logs a message to the terminal with [INFO] prefix
+// The message is also forwarded to the Discord server without pinging users
 func InfoToDiscord(v ...interface{}) {
 	log(typeInfo, v...)
 	go sendHook(false, v...)
 }
 
+// InfoWithAttachment logs a message to the terminal with [INFO] prefix
+// If we can send a webhook, the message and attachment are forwarded to the Discord server without pinging users
+// If we cannot send a webhook the attachment is sent to the terminal
 func InfoWithAttachment(attachment []byte, v ...interface{}) {
 	log(typeInfo, v...)
 	if !logger.sendHooks {
@@ -151,15 +159,21 @@ func InfoWithAttachment(attachment []byte, v ...interface{}) {
 	}
 }
 
+// Warn logs a message to the terminal with [WARN] prefix
 func Warn(v ...interface{}) {
 	log(typeWarning, v...)
 }
 
+// WarnToDiscord logs a message to the terminal with [WARN] prefix
+// The message is also forwarded to the Discord server without pinging users
 func WarnToDiscord(v ...interface{}) {
 	log(typeWarning, v...)
 	go sendHook(false, v...)
 }
 
+// WarnWithAttachment logs a message to the terminal with [WARN] prefix
+// If we can send a webhook, the message and attachment are forwarded to the Discord server without pinging users
+// If we cannot send a webhook the attachment is sent to the terminal
 func WarnWithAttachment(attachment []byte, v ...interface{}) {
 	log(typeWarning, v...)
 	if !logger.sendHooks {
@@ -173,15 +187,21 @@ func WarnWithAttachment(attachment []byte, v ...interface{}) {
 	}
 }
 
+// Error logs a message to the terminal with [ERROR] prefix
 func Error(v ...interface{}) {
 	log(typeError, v...)
 }
 
+// ErrorToDiscord logs a message to the terminal with [ERROR] prefix
+// The message is also forwarded to the Discord server without pinging users
 func ErrorToDiscord(v ...interface{}) {
 	log(typeError, v...)
 	go sendHook(false, v...)
 }
 
+// ErrorWithAttachment logs a message to the terminal with [ERROR] prefix
+// If we can send a webhook, the message and attachment are forwarded to the Discord server without pinging users
+// If we cannot send a webhook the attachment is sent to the terminal
 func ErrorWithAttachment(attachment []byte, v ...interface{}) {
 	log(typeError, v...)
 	if !logger.sendHooks {
@@ -195,15 +215,21 @@ func ErrorWithAttachment(attachment []byte, v ...interface{}) {
 	}
 }
 
+// Panic logs a message to the terminal with [PANIC] prefix
 func Panic(v ...interface{}) {
 	log(typePanic, v...)
 }
 
+// PanicToDiscord logs a message to the terminal with [PANIC] prefix
+// The message is also forwarded to the Discord server and pings the users
 func PanicToDiscord(v ...interface{}) {
 	log(typePanic, v...)
 	go sendHook(true, v...)
 }
 
+// PanicWithAttachment logs a message to the terminal with [PANIC] prefix
+// If we can send a webhook, the message and attachment are forwarded to the Discord server and pings the users
+// If we cannot send a webhook the attachment is sent to the terminal
 func PanicWithAttachment(attachment []byte, v ...interface{}) {
 	log(typePanic, v...)
 	if !logger.sendHooks {
@@ -217,15 +243,21 @@ func PanicWithAttachment(attachment []byte, v ...interface{}) {
 	}
 }
 
+// Success logs a message to the terminal with [SUCCESS] prefix
 func Success(v ...interface{}) {
 	log(typeSuccess, v...)
 }
 
+// SuccessToDiscord logs a message to the terminal with [SUCCESS] prefix
+// The message is also forwarded to the Discord server without pinging users
 func SuccessToDiscord(v ...interface{}) {
 	log(typeSuccess, v...)
 	go sendHook(false, v...)
 }
 
+// SuccessWithAttachment logs a message to the terminal with [SUCCESS] prefix
+// If we can send a webhook, the message and attachment are forwarded to the Discord server without pinging users
+// If we cannot send a webhook the attachment is sent to the terminal
 func SuccessWithAttachment(attachment []byte, v ...interface{}) {
 	log(typeSuccess, v...)
 	if !logger.sendHooks {
