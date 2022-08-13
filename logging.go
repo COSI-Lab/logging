@@ -44,6 +44,10 @@ func Setup(hookURL, pingID string) {
 // sendFile creates a multipart form message and sends it to the specified URL
 // with the specified content as a file attachment
 func sendFile(content []byte) {
+	if content == nil {
+		return
+	}
+
 	logger.Lock()
 	defer logger.Unlock()
 
