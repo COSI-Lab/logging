@@ -78,12 +78,13 @@ func sendFile(content []byte) {
 	// Execute the request
 	client := &http.Client{}
 	response, err := client.Do(request)
-	response.Body.Close()
 
 	if err != nil {
 		fmt.Println(time.Now().Format("2006/01/02 15:04:05 "), "\033[1m\033[31m[ERROR]   \033[0m| ", err)
 		return
 	}
+
+	response.Body.Close()
 }
 
 func sendHook(ping bool, content ...interface{}) {
@@ -274,4 +275,3 @@ func SuccessWithAttachment(attachment []byte, v ...interface{}) {
 		}()
 	}
 }
-
