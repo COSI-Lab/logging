@@ -23,7 +23,7 @@ import (
 
 func main() {
     logging.Info("Hello, world!")
-    logging.Warn("Warning world didn't say hello back!")
-    logging.Error("Error world is broken!")
+    logging.Warn("World didn't say hello back!")
+    logging.Error("World is broken!")
 }
 ```
