@@ -1,277 +1,146 @@
 package logging
 
 import (
-	"bytes"
-	"encoding/json"
 	"fmt"
-	"mime/multipart"
-	"net/http"
 	"sync"
 	"time"
 )
 
-type messageType int
-
-const (
-	typeInfo messageType = iota
-	typeWarning
-	typeError
-	typePanic
-	typeSuccess
-)
+type threadSafeLogger struct {
+	sync.Mutex
+}
 
 var logger = threadSafeLogger{}
 
-type threadSafeLogger struct {
-	sync.Mutex
-	sendHooks      bool
-	discordHookURL string
-	discordPingID  string
-}
+type messageType int
 
-// Setup primes the threadSafeLogger to send messages to a Discord server
-// hookURL is the weebhook URL created by the Discord server in the Integrations settings
-// pingID is the Discord user or role ID to ping when sending important messages
-// Setup can be safely called at any time to change the Discord server hookURL and pingID
-func Setup(hookURL, pingID string) {
-	logger.Lock()
-	logger.discordHookURL = hookURL
-	logger.discordPingID = pingID
-	logger.sendHooks = hookURL != "" && pingID != ""
-	logger.Unlock()
-}
+const (
+	// InfoT is used for logging informational [INFO] messages
+	InfoT messageType = iota
+	// WarningT is used for logging warning [WARN] messages
+	WarningT
+	// ErrorT is used for logging error [ERROR] messages
+	ErrorT
+	// PanicT is used for logging panic [PANIC] messages
+	PanicT
+	// SuccessT is used for logging success [SUCCESS] messages
+	SuccessT
+)
 
-// sendFile creates a multipart form message and sends it to the specified URL
-// with the specified content as a file attachment
-func sendFile(content []byte) {
-	if content == nil {
-		return
-	}
+const tm = "2006/01/02 15:04:05"
 
-	logger.Lock()
-	defer logger.Unlock()
-
-	if !logger.sendHooks {
-		return
-	}
-
-	body := &bytes.Buffer{}
-	writer := multipart.NewWriter(body)
-
-	// Add a file attachment to the multipart writer
-	part, err := writer.CreateFormFile("text", "attachment.txt")
-	if err != nil {
-		fmt.Println(time.Now().Format("2006/01/02 15:04:05 "), "\033[1m\033[31m[ERROR]   \033[0m| ", err)
-		return
-	}
-	part.Write(content)
-	writer.Close()
-
-	// Build the request
-	request, err := http.NewRequest("POST", logger.discordHookURL, body)
-	if err != nil {
-		fmt.Println(time.Now().Format("2006/01/02 15:04:05 "), "\033[1m\033[31m[ERROR]   \033[0m| ", err)
-		return
-	}
-	request.Header.Add("Content-Type", writer.FormDataContentType())
-
-	// Execute the request
-	client := &http.Client{}
-	response, err := client.Do(request)
-
-	if err != nil {
-		fmt.Println(time.Now().Format("2006/01/02 15:04:05 "), "\033[1m\033[31m[ERROR]   \033[0m| ", err)
-		return
-	}
-
-	response.Body.Close()
-}
-
-func sendHook(ping bool, content ...interface{}) {
-	logger.Lock()
-	defer logger.Unlock()
-
-	if !logger.sendHooks {
-		return
-	}
-
-	var values map[string]string
-	if ping {
-		values = map[string]string{"content": fmt.Sprintf("<@%s> %v", logger.discordPingID, fmt.Sprint(content...))}
-	} else {
-		values = map[string]string{"content": fmt.Sprintf("%v", fmt.Sprint(content...))}
-	}
-	json_data, err := json.Marshal(values)
-	if err != nil {
-		fmt.Println(time.Now().Format("2006/01/02 15:04:05 "), "\033[1m\033[31m[ERROR]   \033[0m| ", err)
-		return
-	}
-
-	send := bytes.NewBuffer(json_data)
-	_, err = http.Post(logger.discordHookURL, "application/json", send)
-	if err != nil {
-		fmt.Println(time.Now().Format("2006/01/02 15:04:05 "), "\033[1m\033[31m[ERROR]   \033[0m| ", err)
-		return
-	}
-}
-
-func log(mt messageType, v ...interface{}) {
-	logger.Lock()
-	fmt.Print(time.Now().Format("2006/01/02 15:04:05 "))
-
+func (mt messageType) String() string {
 	switch mt {
-	case typeInfo:
-		fmt.Print("\033[1m[INFO]    \033[0m| ")
-	case typeWarning:
-		fmt.Print("\033[1m\033[33m[WARN]    \033[0m| ")
-	case typeError:
-		fmt.Print("\033[1m\033[31m[ERROR]   \033[0m| ")
-	case typePanic:
-		fmt.Print("\033[1m\033[34m[PANIC]   \033[0m| ")
-	case typeSuccess:
-		fmt.Print("\033[1m\033[32m[SUCCESS] \033[0m| ")
+	case InfoT:
+		return "\033[1m[INFO]    \033[0m| "
+	case WarningT:
+		return "\033[1m\033[33m[WARN]    \033[0m| "
+	case ErrorT:
+		return "\033[1m\033[31m[ERROR]   \033[0m| "
+	case PanicT:
+		return "\033[1m\033[34m[PANIC]   \033[0m| "
+	case SuccessT:
+		return "\033[1m\033[32m[SUCCESS] \033[0m| "
+	default:
+		return ""
+	}
+}
+
+// LogEntryT enables programmatic creation of log entries
+type LogEntryT struct {
+	Type    messageType
+	Message string
+}
+
+func (le LogEntryT) String() string {
+	if le.Message[len(le.Message)-1] != '\n' {
+		return fmt.Sprintf("%s %s %s\n", time.Now().Format(tm), le.Type.String(), le.Message)
 	}
 
-	fmt.Println(v...)
+	return fmt.Sprintf("%s %s %s", time.Now().Format(tm), le.Type.String(), le.Message)
+}
+
+func logf(mt messageType, format string, v ...interface{}) {
+	logger.Lock()
+	if format[len(format)-1] != '\n' {
+		fmt.Printf("%s %s %s\n", time.Now().Format(tm), mt.String(), fmt.Sprintf(format, v...))
+	} else {
+		fmt.Printf("%s %s %s", time.Now().Format(tm), mt.String(), fmt.Sprintf(format, v...))
+	}
 	logger.Unlock()
 }
 
-// Info logs a message to the terminal with [INFO] prefix
+func logln(mt messageType, v ...interface{}) {
+	logger.Lock()
+	fmt.Printf("%s %s %s\n", time.Now().Format(tm), mt.String(), fmt.Sprint(v...))
+	logger.Unlock()
+}
+
+// Infof formats a message and logs it with [INFO] tag, it adds a newline if the message didn't end with one
+func Infof(format string, v ...interface{}) {
+	logf(InfoT, format, v...)
+}
+
+// Info logs a message with [INFO] tag and a newline
 func Info(v ...interface{}) {
-	log(typeInfo, v...)
+	logln(InfoT, v...)
 }
 
-// InfoToDiscord logs a message to the terminal with [INFO] prefix
-// The message is also forwarded to the Discord server without pinging users
-func InfoToDiscord(v ...interface{}) {
-	log(typeInfo, v...)
-	go sendHook(false, v...)
+// Warningf formats a message and logs it with [WARN] tag, it adds a newline if the message didn't end with one
+func Warningf(format string, v ...interface{}) {
+	logf(WarningT, format, v...)
 }
 
-// InfoWithAttachment logs a message to the terminal with [INFO] prefix
-// If we can send a webhook, the message and attachment are forwarded to the Discord server without pinging users
-// If we cannot send a webhook the attachment is sent to the terminal
-func InfoWithAttachment(attachment []byte, v ...interface{}) {
-	log(typeInfo, v...)
-	if !logger.sendHooks {
-		log(typeInfo, string(attachment))
-	} else {
-		go func() {
-			// TODO handle error returned by sendFile
-			sendFile(attachment)
-			sendHook(false, v...)
-		}()
-	}
+// Warning logs a message with [WARN] tag and a newline
+func Warning(v ...interface{}) {
+	logln(WarningT, v...)
 }
 
-// Warn logs a message to the terminal with [WARN] prefix
-func Warn(v ...interface{}) {
-	log(typeWarning, v...)
+// Errorf formats a message and logs it with [ERROR] tag, it adds a newline if the message didn't end with one
+func Errorf(format string, v ...interface{}) {
+	logf(ErrorT, format, v...)
 }
 
-// WarnToDiscord logs a message to the terminal with [WARN] prefix
-// The message is also forwarded to the Discord server without pinging users
-func WarnToDiscord(v ...interface{}) {
-	log(typeWarning, v...)
-	go sendHook(false, v...)
-}
-
-// WarnWithAttachment logs a message to the terminal with [WARN] prefix
-// If we can send a webhook, the message and attachment are forwarded to the Discord server without pinging users
-// If we cannot send a webhook the attachment is sent to the terminal
-func WarnWithAttachment(attachment []byte, v ...interface{}) {
-	log(typeWarning, v...)
-	if !logger.sendHooks {
-		log(typeWarning, string(attachment))
-	} else {
-		go func() {
-			// TODO handle error returned by sendFile
-			sendFile(attachment)
-			sendHook(false, v...)
-		}()
-	}
-}
-
-// Error logs a message to the terminal with [ERROR] prefix
+// Error logs a message with [ERROR] tag and a newline
 func Error(v ...interface{}) {
-	log(typeError, v...)
+	logln(ErrorT, v...)
 }
 
-// ErrorToDiscord logs a message to the terminal with [ERROR] prefix
-// The message is also forwarded to the Discord server without pinging users
-func ErrorToDiscord(v ...interface{}) {
-	log(typeError, v...)
-	go sendHook(false, v...)
+// Panicf formats a message and logs it with [PANIC] tag, it adds a newline if the message didn't end with one
+// Note: this function does not call panic() or otherwise stops the program
+func Panicf(format string, v ...interface{}) {
+	logf(PanicT, format, v...)
 }
 
-// ErrorWithAttachment logs a message to the terminal with [ERROR] prefix
-// If we can send a webhook, the message and attachment are forwarded to the Discord server without pinging users
-// If we cannot send a webhook the attachment is sent to the terminal
-func ErrorWithAttachment(attachment []byte, v ...interface{}) {
-	log(typeError, v...)
-	if !logger.sendHooks {
-		log(typeError, string(attachment))
-	} else {
-		go func() {
-			// TODO handle error returned by sendFile
-			sendFile(attachment)
-			sendHook(false, v...)
-		}()
-	}
-}
-
-// Panic logs a message to the terminal with [PANIC] prefix
+// Panic logs a message with [PANIC] tag and a newline
+// Note: this function does not call panic() or otherwise stops the program
 func Panic(v ...interface{}) {
-	log(typePanic, v...)
+	logln(PanicT, v...)
 }
 
-// PanicToDiscord logs a message to the terminal with [PANIC] prefix
-// The message is also forwarded to the Discord server and pings the users
-func PanicToDiscord(v ...interface{}) {
-	log(typePanic, v...)
-	go sendHook(true, v...)
+// Successf formats a message and logs it with [SUCCESS] tag, it adds a newline if the message didn't end with one
+func Successf(format string, v ...interface{}) {
+	logf(SuccessT, format, v...)
 }
 
-// PanicWithAttachment logs a message to the terminal with [PANIC] prefix
-// If we can send a webhook, the message and attachment are forwarded to the Discord server and pings the users
-// If we cannot send a webhook the attachment is sent to the terminal
-func PanicWithAttachment(attachment []byte, v ...interface{}) {
-	log(typePanic, v...)
-	if !logger.sendHooks {
-		log(typePanic, string(attachment))
-	} else {
-		go func() {
-			// TODO handle error returned by sendFile
-			sendFile(attachment)
-			sendHook(true, v...)
-		}()
-	}
-}
-
-// Success logs a message to the terminal with [SUCCESS] prefix
+// Success logs a message with [SUCCESS] tag and a newline
 func Success(v ...interface{}) {
-	log(typeSuccess, v...)
+	logln(SuccessT, v...)
 }
 
-// SuccessToDiscord logs a message to the terminal with [SUCCESS] prefix
-// The message is also forwarded to the Discord server without pinging users
-func SuccessToDiscord(v ...interface{}) {
-	log(typeSuccess, v...)
-	go sendHook(false, v...)
+// Logf formats a message and logs it with provided tag, it adds a newline if the message didn't end with one
+func Logf(mt messageType, format string, v ...interface{}) {
+	logf(mt, format, v...)
 }
 
-// SuccessWithAttachment logs a message to the terminal with [SUCCESS] prefix
-// If we can send a webhook, the message and attachment are forwarded to the Discord server without pinging users
-// If we cannot send a webhook the attachment is sent to the terminal
-func SuccessWithAttachment(attachment []byte, v ...interface{}) {
-	log(typeSuccess, v...)
-	if !logger.sendHooks {
-		log(typeSuccess, string(attachment))
-	} else {
-		go func() {
-			// TODO handle error returned by sendFile
-			sendFile(attachment)
-			sendHook(false, v...)
-		}()
-	}
+// Log logs a message with provided tag and a newline
+func Log(mt messageType, v ...interface{}) {
+	logln(mt, v...)
+}
+
+// LogEntry logs a LogEntryT
+func LogEntry(le LogEntryT) {
+	logger.Lock()
+	fmt.Print(le.String())
+	logger.Unlock()
 }
